@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/demo.gif" width="800" alt="Skills Manager 演示" />
+  <img src="docs/demo-zh.gif" width="800" alt="Skills Manager 演示" />
 </p>
 
 ## 功能
