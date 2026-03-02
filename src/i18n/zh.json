@@ -93,6 +93,25 @@
     "agentCount": "{{count}} 个 Agent",
     "ready": "已就绪",
     "standby": "待启用",
+    "updateStatus": {
+      "unknown": "未知",
+      "checking": "检查中",
+      "updating": "更新中",
+      "upToDate": "已最新",
+      "available": "可更新",
+      "error": "检查失败",
+      "localOnly": "本地来源",
+      "sourceMissing": "原路径丢失"
+    },
+    "updateActions": {
+      "check": "检查",
+      "checkAll": "检查全部",
+      "checkedAll": "已检查全部 Skill 更新",
+      "update": "更新",
+      "updated": "Skill 已更新",
+      "reimport": "重新导入",
+      "reimported": "Skill 已重新导入"
+    },
     "filters": {
       "all": "全部",
       "enabled": "当前场景已启用",

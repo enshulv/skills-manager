@@ -41,6 +41,10 @@ pub fn run() {
             commands::skills::install_local,
             commands::skills::install_git,
             commands::skills::install_from_skillssh,
+            commands::skills::check_skill_update,
+            commands::skills::check_all_skill_updates,
+            commands::skills::update_skill,
+            commands::skills::reimport_local_skill,
             // Sync
             commands::sync::sync_skill_to_tool,
             commands::sync::unsync_skill_from_tool,

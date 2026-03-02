@@ -93,6 +93,25 @@
     "agentCount": "{{count}} agents",
     "ready": "Ready",
     "standby": "Standby",
+    "updateStatus": {
+      "unknown": "Unknown",
+      "checking": "Checking",
+      "updating": "Updating",
+      "upToDate": "Up to date",
+      "available": "Update available",
+      "error": "Check failed",
+      "localOnly": "Local source",
+      "sourceMissing": "Source missing"
+    },
+    "updateActions": {
+      "check": "Check",
+      "checkAll": "Check All",
+      "checkedAll": "Checked all skill updates",
+      "update": "Update",
+      "updated": "Skill updated",
+      "reimport": "Reimport",
+      "reimported": "Skill reimported"
+    },
     "filters": {
       "all": "All",
       "enabled": "Enabled",
