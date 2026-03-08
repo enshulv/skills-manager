@@ -59,6 +59,18 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
+## 常见问题
+
+### macOS 提示"应用已损坏，无法打开"
+
+下载应用后如果出现此提示，在终端执行以下命令后重新打开即可：
+
+```bash
+xattr -cr /Applications/Skills\ Manager.app
+```
+
+如果 `.app` 不在 `/Applications`，请替换为实际路径。
+
 ## License
 
 MIT

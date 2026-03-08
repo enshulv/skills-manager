@@ -59,6 +59,18 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
+## Troubleshooting
+
+### macOS: "App is damaged and can't be opened"
+
+If you see this error after downloading the app, run the following command in Terminal and then open the app again:
+
+```bash
+xattr -cr /Applications/Skills\ Manager.app
+```
+
+Replace the path with wherever you placed the `.app` file if it's not in `/Applications`.
+
 ## License
 
 MIT
