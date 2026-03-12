@@ -16,6 +16,10 @@
   <img src="assets/demo.gif" width="800" alt="Skills Manager Demo" />
 </p>
 
+| My Skills | Project Skills |
+|:---------:|:--------------:|
+| <img src="assets/CleanShot_20260312_234539@2x.png" width="400" alt="My Skills" /> | <img src="assets/CleanShot_20260312_234613@2x.png" width="400" alt="Project Skills" /> |
+
 ## Features
 
 - **Unified skill library** — Install skills from Git repos, local folders, `.zip` / `.skill` archives, or the [skills.sh](https://skills.sh) marketplace. Everything goes into one central repo at `~/.skills-manager`.

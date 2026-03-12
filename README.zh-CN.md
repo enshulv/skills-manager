@@ -16,6 +16,10 @@
   <img src="assets/demo-zh.gif" width="800" alt="Skills Manager 演示" />
 </p>
 
+| 我的 Skills | 项目 Skills |
+|:-----------:|:----------:|
+| <img src="assets/CleanShot_20260312_234539@2x.png" width="400" alt="我的 Skills" /> | <img src="assets/CleanShot_20260312_234613@2x.png" width="400" alt="项目 Skills" /> |
+
 ## 功能
 
 - **统一技能库** — 从 Git 仓库、本地目录、`.zip` / `.skill` 文件或 [skills.sh](https://skills.sh) 市场安装技能，统一存放在 `~/.skills-manager`。
