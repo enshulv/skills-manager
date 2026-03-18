@@ -1,6 +1,7 @@
 use crate::core::{central_repo, git_backup};
 use std::sync::Arc;
 use tauri::State;
+use walkdir::WalkDir;
 
 use crate::core::skill_store::SkillStore;
 
@@ -155,13 +156,15 @@ fn reconcile_skills_index(store: &SkillStore) -> anyhow::Result<()> {
     }
 
     // Add missing DB records for directories present in central repo.
-    let entries = std::fs::read_dir(&skills_dir)?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        if !is_valid_skill_dir(&path) {
+    for entry in WalkDir::new(&skills_dir)
+        .min_depth(1)
+        .max_depth(6)
+        .into_iter()
+        .filter_entry(|e| e.file_name().to_string_lossy() != ".git")
+        .flatten()
+    {
+        let path = entry.path().to_path_buf();
+        if !entry.file_type().is_dir() || !is_valid_skill_dir(&path) {
             continue;
         }
 

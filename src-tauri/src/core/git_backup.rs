@@ -169,10 +169,51 @@ pub fn push(skills_dir: &Path) -> Result<()> {
     let branch = run_git(skills_dir, &["rev-parse", "--abbrev-ref", "HEAD"])
         .unwrap_or_else(|_| "main".to_string());
 
-    // Try push; if no upstream, set it
+    // Push branch first; if no upstream, set it.
     let result = run_git(skills_dir, &["push"]);
     if result.is_err() {
         run_git_checked(skills_dir, &["push", "-u", "origin", &branch])?;
+    }
+
+    // Snapshot tags are lightweight (by design), so `--follow-tags` will not include them.
+    // Push only missing snapshot tags in a single network round-trip.
+    let local_snapshot_tags: Vec<String> = run_git(skills_dir, &["tag", "--list", "sm-v-*"])?
+        .lines()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(|t| t.to_string())
+        .collect();
+
+    if !local_snapshot_tags.is_empty() {
+        let remote_snapshot_tags_raw = run_git(
+            skills_dir,
+            &["ls-remote", "--tags", "--refs", "origin", "sm-v-*"],
+        )
+        .unwrap_or_default();
+
+        let remote_snapshot_tags: std::collections::HashSet<String> = remote_snapshot_tags_raw
+            .lines()
+            .filter_map(|line| line.split_whitespace().nth(1))
+            .filter_map(|ref_name| ref_name.strip_prefix("refs/tags/"))
+            .map(|tag| tag.to_string())
+            .collect();
+
+        let missing_tag_refs: Vec<String> = local_snapshot_tags
+            .into_iter()
+            .filter(|tag| !remote_snapshot_tags.contains(tag))
+            .map(|tag| format!("refs/tags/{tag}"))
+            .collect();
+
+        if !missing_tag_refs.is_empty() {
+            let mut cmd = git_command();
+            cmd.arg("-C").arg(skills_dir).arg("push").arg("origin");
+            cmd.args(&missing_tag_refs);
+            let output = cmd.output().context("Failed to run git command")?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                anyhow::bail!("git command failed: {}", redact_urls_in_text(&stderr));
+            }
+        }
     }
 
     Ok(())
@@ -188,6 +229,16 @@ pub fn pull(skills_dir: &Path) -> Result<()> {
 /// Create an annotated snapshot tag on current HEAD.
 pub fn create_snapshot_tag(skills_dir: &Path) -> Result<String> {
     ensure_repo(skills_dir)?;
+
+    // Reuse an existing snapshot tag on HEAD to avoid duplicate history entries
+    // when a previous sync created a tag but push failed.
+    let existing_on_head = run_git(
+        skills_dir,
+        &["tag", "--points-at", "HEAD", "--list", "sm-v-*", "--sort=-creatordate"],
+    )?;
+    if let Some(tag) = existing_on_head.lines().find(|line| !line.trim().is_empty()) {
+        return Ok(tag.trim().to_string());
+    }
 
     let short_sha = run_git(skills_dir, &["rev-parse", "--short", "HEAD"])?;
     let timestamp = Utc::now().format("%Y%m%d-%H%M%S");
@@ -258,20 +309,35 @@ pub fn restore_snapshot_version(skills_dir: &Path, tag: &str) -> Result<()> {
     );
     run_git_checked(skills_dir, &["tag", &restore_point])?;
 
-    // Apply snapshot content into working tree + index, then commit as a forward change.
-    run_git_checked(skills_dir, &["checkout", tag, "--", "."])?;
-    run_git_checked(skills_dir, &["add", "-A"])?;
+    let restore_result: Result<()> = (|| {
+        // Align working tree + index to snapshot tree exactly (including deletions),
+        // then commit as a forward change.
+        run_git_checked(skills_dir, &["read-tree", "--reset", "-u", tag])?;
 
-    let changed = run_git(skills_dir, &["status", "--porcelain"])?;
-    if changed.is_empty() {
-        return Ok(());
+        let changed = run_git(skills_dir, &["status", "--porcelain"])?;
+        if changed.is_empty() {
+            return Ok(());
+        }
+
+        run_git_checked(
+            skills_dir,
+            &["commit", "-m", &format!("restore: switch skills library to {}", tag)],
+        )?;
+        Ok(())
+    })();
+
+    match restore_result {
+        Ok(()) => {
+            let _ = run_git_checked(skills_dir, &["tag", "-d", &restore_point]);
+            Ok(())
+        }
+        Err(err) => {
+            // Best-effort rollback to pre-restore HEAD.
+            let _ = run_git_checked(skills_dir, &["read-tree", "--reset", "-u", &restore_point]);
+            let _ = run_git_checked(skills_dir, &["tag", "-d", &restore_point]);
+            Err(err).context("Restore failed after mutating working tree; attempted automatic rollback")
+        }
     }
-
-    run_git_checked(
-        skills_dir,
-        &["commit", "-m", &format!("restore: switch skills library to {}", tag)],
-    )?;
-    Ok(())
 }
 
 /// Clone a remote repository into the skills directory.

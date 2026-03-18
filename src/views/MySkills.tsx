@@ -203,7 +203,7 @@ export function MySkills() {
         api.setSettings("git_backup_remote_url", detectedRemote).catch(() => {});
       }
     })();
-  }, [refreshGitStatus]);
+  }, []);
 
   useEffect(() => {
     const handleWindowFocus = () => {
@@ -499,7 +499,7 @@ export function MySkills() {
       return {
         label: t("mySkills.gitRepoSync"),
         disabled: false,
-        toneClassName: "text-red-500",
+        toneClassName: "text-amber-500",
       };
     }
     if (gitStatus.has_changes || gitStatus.ahead > 0 || gitStatus.behind > 0) {
