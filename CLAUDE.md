@@ -41,3 +41,4 @@ git push origin main --tags
 | `src-tauri/tauri.conf.json` | Tauri 配置（版本号、窗口、打包） |
 | `.github/workflows/release.yml` | CI 跨平台构建 workflow |
 | `CHANGELOG.md` | 版本变更记录 |
+| `docs/troubleshooting/` | 踩坑与 bug 修复经验记录 |
