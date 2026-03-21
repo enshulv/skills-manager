@@ -75,13 +75,17 @@ pub async fn open_central_repo_folder() -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn check_app_update(app: tauri::AppHandle) -> Result<AppUpdateInfo, AppError> {
+pub async fn check_app_update(app: tauri::AppHandle, store: State<'_, Arc<SkillStore>>) -> Result<AppUpdateInfo, AppError> {
     let current_version = app.config().version.clone().unwrap_or_default();
+    let proxy_url = store.get_setting("proxy_url").ok().flatten();
     tauri::async_runtime::spawn_blocking(move || {
-        let client = reqwest::blocking::Client::builder()
-            .user_agent("skills-manager")
-            .build()
-            .map_err(AppError::network)?;
+        let mut builder = reqwest::blocking::Client::builder().user_agent("skills-manager");
+        if let Some(proxy) = proxy_url.as_deref().filter(|s| !s.is_empty()) {
+            if let Ok(p) = reqwest::Proxy::all(proxy) {
+                builder = builder.proxy(p);
+            }
+        }
+        let client = builder.build().map_err(AppError::network)?;
 
         let resp: serde_json::Value = client
             .get("https://api.github.com/repos/xingkongliang/skills-manager/releases/latest")

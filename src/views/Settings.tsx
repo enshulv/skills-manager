@@ -46,12 +46,15 @@ export function Settings() {
   const [installing, setInstalling] = useState(false);
   const [gitRemoteInput, setGitRemoteInput] = useState("");
   const [gitRemoteSaving, setGitRemoteSaving] = useState(false);
+  const [proxyInput, setProxyInput] = useState("");
+  const [proxySaving, setProxySaving] = useState(false);
   const GITHUB_URL = "https://github.com/xingkongliang/skills-manager";
 
   useEffect(() => {
     api.getSettings("sync_mode").then((v) => { if (v) setSyncMode(v); });
     api.getSettings("default_scenario").then((v) => { if (v) setDefaultScenario(v); });
     api.getSettings("close_action").then((v) => { setCloseAction(v ?? ""); });
+    api.getSettings("proxy_url").then((v) => { setProxyInput(v ?? ""); });
     api.getCentralRepoPath().then(setCentralRepoPath).catch(() => {});
 
     (async () => {
@@ -171,6 +174,18 @@ export function Settings() {
       toast.error(t("common.error"));
     } finally {
       setGitRemoteSaving(false);
+    }
+  };
+
+  const handleSaveProxy = async () => {
+    setProxySaving(true);
+    try {
+      await api.setSettings("proxy_url", proxyInput.trim());
+      toast.success(t("settings.proxyUrlSaved"));
+    } catch {
+      toast.error(t("common.error"));
+    } finally {
+      setProxySaving(false);
     }
   };
 
@@ -394,6 +409,40 @@ export function Settings() {
                     {t(`settings.closeAction_${val || "ask"}`)}
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Proxy config */}
+        <section>
+          <h2 className="app-section-title mb-3">
+            {t("settings.proxyConfig")}
+          </h2>
+          <div className="app-panel overflow-hidden divide-y divide-border-subtle">
+            <div className="px-4 py-3">
+              <h3 className="text-[13px] text-secondary font-medium mb-0.5">{t("settings.proxyUrl")}</h3>
+              <p className="text-[13px] text-muted mb-2">{t("settings.proxyUrlDesc")}</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={proxyInput}
+                  onChange={(e) => setProxyInput(e.target.value)}
+                  placeholder={t("settings.proxyUrlPlaceholder")}
+                  className={`${fieldClass} flex-1 font-mono`}
+                />
+                <button
+                  onClick={handleSaveProxy}
+                  disabled={proxySaving}
+                  className={`${actionButtonClass} bg-surface-hover hover:bg-surface-active text-tertiary border-border`}
+                >
+                  {proxySaving ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <LinkIcon className="w-3 h-3" />
+                  )}
+                  {t("common.save")}
+                </button>
               </div>
             </div>
           </div>
