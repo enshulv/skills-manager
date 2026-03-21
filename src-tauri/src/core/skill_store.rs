@@ -539,6 +539,17 @@ impl SkillStore {
         Ok(())
     }
 
+    pub fn reorder_projects(&self, ids: &[String]) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        for (i, id) in ids.iter().enumerate() {
+            conn.execute(
+                "UPDATE projects SET sort_order = ?1 WHERE id = ?2",
+                params![i as i32, id],
+            )?;
+        }
+        Ok(())
+    }
+
     // ── Scenario-Skill mapping ──
 
     pub fn add_skill_to_scenario(&self, scenario_id: &str, skill_id: &str) -> Result<()> {
