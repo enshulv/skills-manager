@@ -112,7 +112,7 @@ pub async fn check_app_update(app: tauri::AppHandle) -> Result<AppUpdateInfo, Ap
 }
 
 #[tauri::command]
-pub fn app_exit(app: tauri::AppHandle) {
+pub async fn app_exit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
