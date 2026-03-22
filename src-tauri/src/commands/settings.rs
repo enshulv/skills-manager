@@ -116,7 +116,7 @@ pub async fn check_app_update(app: tauri::AppHandle, store: State<'_, Arc<SkillS
 }
 
 #[tauri::command]
-pub fn app_exit(app: tauri::AppHandle) {
+pub async fn app_exit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
