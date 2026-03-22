@@ -64,6 +64,13 @@ pub fn is_valid_skill_dir(dir: &Path) -> bool {
 /// Characters that are invalid in Windows file/directory names.
 const WINDOWS_RESERVED: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
+/// Reserved Windows device names that cannot be used as file/directory names.
+const WINDOWS_RESERVED_BASENAMES: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+    "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8",
+    "LPT9",
+];
+
 /// Sanitize a skill name so it is safe to use as a single directory component
 /// on all major platforms (macOS, Linux, Windows).
 ///
@@ -107,7 +114,18 @@ pub fn sanitize_skill_name(name: &str) -> Option<String> {
     if trimmed.is_empty() {
         None
     } else {
-        Some(trimmed.to_string())
+        let reserved = trimmed
+            .split('.')
+            .next()
+            .map(|base| base.to_ascii_uppercase())
+            .map(|upper| WINDOWS_RESERVED_BASENAMES.contains(&upper.as_str()))
+            .unwrap_or(false);
+
+        if reserved {
+            Some(format!("_{}", trimmed))
+        } else {
+            Some(trimmed.to_string())
+        }
     }
 }
 
@@ -339,6 +357,13 @@ mod tests {
     fn sanitize_control_only_input_produces_underscores() {
         // Control chars become `_`, not removed — so result is non-empty.
         assert_eq!(sanitize_skill_name("\x00\x01"), Some("__".into()));
+    }
+
+    #[test]
+    fn sanitize_avoids_windows_reserved_device_names() {
+        assert_eq!(sanitize_skill_name("CON"), Some("_CON".into()));
+        assert_eq!(sanitize_skill_name("nul.txt"), Some("_nul.txt".into()));
+        assert_eq!(sanitize_skill_name("Com1"), Some("_Com1".into()));
     }
 
     // ── infer_skill_name ──

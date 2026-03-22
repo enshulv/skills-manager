@@ -79,9 +79,28 @@ impl PreparedSource {
 }
 
 pub fn install_from_local(source: &Path, name: Option<&str>) -> Result<InstallResult> {
-    let skill_name = resolve_local_skill_name(source, name)?;
-    let dest = central_repo::skills_dir().join(&skill_name);
-    install_from_local_to_destination(source, Some(&skill_name), &dest)
+    let prepared = PreparedSource::open(source)?;
+    let skill_dir = prepared.skill_dir();
+
+    let sanitized_name = match name {
+        Some(n) if !n.is_empty() => {
+            sanitize_skill_name(n).ok_or_else(|| anyhow::anyhow!("Invalid skill name: '{}'", n))?
+        }
+        _ => skill_metadata::infer_skill_name(skill_dir),
+    };
+
+    let source_meta_name = skill_metadata::parse_skill_md(skill_dir)
+        .name
+        .unwrap_or_else(|| sanitized_name.clone());
+
+    let skills_dir = central_repo::skills_dir();
+    let dest = unique_skill_dest(&skills_dir, &sanitized_name, &source_meta_name);
+    let final_name = dest
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| sanitized_name.clone());
+
+    install_skill_dir_to_destination(skill_dir, &final_name, &dest)
 }
 
 pub fn install_from_local_to_destination(
@@ -187,6 +206,41 @@ fn safe_extract(archive: &mut zip::ZipArchive<std::fs::File>, dest: &Path) -> Re
     Ok(())
 }
 
+/// Return a collision-safe destination directory for an install.
+///
+/// Rules:
+/// - Prefer `<name>` if missing.
+/// - Reuse an existing directory when it clearly belongs to the same skill
+///   (same metadata `name`, or legacy no-metadata `<name>` directory).
+/// - Otherwise allocate `<name>-2`, `<name>-3`, ...
+fn unique_skill_dest(parent: &Path, sanitized_name: &str, source_meta_name: &str) -> PathBuf {
+    for i in 1u32.. {
+        let candidate = if i == 1 {
+            parent.join(sanitized_name)
+        } else {
+            parent.join(format!("{}-{}", sanitized_name, i))
+        };
+
+        if !candidate.exists() {
+            return candidate;
+        }
+
+        let existing_meta_name = skill_metadata::parse_skill_md(&candidate).name.or_else(|| {
+            if i == 1 {
+                Some(sanitized_name.to_string())
+            } else {
+                None
+            }
+        });
+
+        if existing_meta_name.as_deref() == Some(source_meta_name) {
+            return candidate;
+        }
+    }
+
+    parent.join(sanitized_name)
+}
+
 fn copy_skill_dir(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
@@ -214,4 +268,62 @@ fn copy_skill_dir(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn make_skill_dir(parent: &Path, dir_name: &str, meta_name: Option<&str>) -> PathBuf {
+        let dir = parent.join(dir_name);
+        std::fs::create_dir_all(&dir).unwrap();
+        if let Some(name) = meta_name {
+            std::fs::write(dir.join("SKILL.md"), format!("---\nname: {}\n---\n", name)).unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn unique_dest_returns_base_when_free() {
+        let tmp = tempdir().unwrap();
+        let dest = unique_skill_dest(tmp.path(), "a-b", "a-b");
+        assert_eq!(dest, tmp.path().join("a-b"));
+    }
+
+    #[test]
+    fn unique_dest_reuses_base_for_same_meta_name() {
+        let tmp = tempdir().unwrap();
+        make_skill_dir(tmp.path(), "a-b", Some("A B"));
+
+        let dest = unique_skill_dest(tmp.path(), "a-b", "A B");
+        assert_eq!(dest, tmp.path().join("a-b"));
+    }
+
+    #[test]
+    fn unique_dest_uses_suffix_for_different_meta_name() {
+        let tmp = tempdir().unwrap();
+        make_skill_dir(tmp.path(), "a-b", Some("A-B"));
+
+        let dest = unique_skill_dest(tmp.path(), "a-b", "A:B");
+        assert_eq!(dest, tmp.path().join("a-b-2"));
+    }
+
+    #[test]
+    fn unique_dest_reuses_existing_suffix_for_reinstall() {
+        let tmp = tempdir().unwrap();
+        make_skill_dir(tmp.path(), "a-b", Some("A-B"));
+        make_skill_dir(tmp.path(), "a-b-2", Some("A:B"));
+
+        let dest = unique_skill_dest(tmp.path(), "a-b", "A:B");
+        assert_eq!(dest, tmp.path().join("a-b-2"));
+    }
+
+    #[test]
+    fn unique_dest_legacy_no_metadata_base_can_reinstall() {
+        let tmp = tempdir().unwrap();
+        make_skill_dir(tmp.path(), "legacy", None);
+
+        let dest = unique_skill_dest(tmp.path(), "legacy", "legacy");
+        assert_eq!(dest, tmp.path().join("legacy"));
+    }
+}
 
