@@ -327,6 +327,9 @@ export const removeSkillFromScenario = (skillId: string, scenarioId: string) =>
 export const reorderScenarios = (ids: string[]) =>
   invoke<void>("reorder_scenarios", { ids });
 
+export const reorderProjects = (ids: string[]) =>
+  invoke<void>("reorder_projects", { ids });
+
 // ── Projects ──
 
 export const getProjects = () => invoke<Project[]>("get_projects");

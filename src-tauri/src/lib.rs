@@ -307,6 +307,7 @@ pub fn run() {
             commands::scenarios::add_skill_to_scenario,
             commands::scenarios::remove_skill_from_scenario,
             commands::scenarios::reorder_scenarios,
+            commands::projects::reorder_projects,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
