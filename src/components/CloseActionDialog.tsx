@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -13,23 +13,33 @@ export function CloseActionDialog({ open, onCancel, onClose, onHide }: Props) {
   const { t } = useTranslation();
   const [remember, setRemember] = useState(false);
 
-  // Reset remember state each time dialog opens
-  useEffect(() => {
-    if (open) setRemember(false);
-  }, [open]);
+  const handleCancel = () => {
+    setRemember(false);
+    onCancel();
+  };
+
+  const handleClose = () => {
+    onClose(remember);
+    setRemember(false);
+  };
+
+  const handleHide = () => {
+    onHide(remember);
+    setRemember(false);
+  };
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onCancel} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleCancel} />
       <div className="relative bg-surface border border-border rounded-xl w-full max-w-sm p-5 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-[13px] font-semibold text-primary">
             {t("closeAction.title")}
           </h2>
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="text-muted hover:text-secondary p-1 rounded transition-colors outline-none"
           >
             <X className="w-4 h-4" />
@@ -50,13 +60,13 @@ export function CloseActionDialog({ open, onCancel, onClose, onHide }: Props) {
 
         <div className="flex justify-end gap-2">
           <button
-            onClick={() => onClose(remember)}
+            onClick={handleClose}
             className="px-3 py-1.5 rounded-[4px] text-[13px] font-medium text-tertiary hover:text-secondary hover:bg-surface-hover transition-colors outline-none"
           >
             {t("closeAction.close")}
           </button>
           <button
-            onClick={() => onHide(remember)}
+            onClick={handleHide}
             className="px-3 py-1.5 rounded-[4px] bg-accent-dark hover:bg-accent text-white text-[13px] font-medium transition-colors border border-accent-border outline-none"
           >
             {t("closeAction.hide")}

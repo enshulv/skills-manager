@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -35,26 +35,48 @@ export function Sidebar() {
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<{ id: string; name: string } | null>(null);
   const [orderedScenarios, setOrderedScenarios] = useState(scenarios);
   const [orderedProjects, setOrderedProjects] = useState(projects);
+  const scenarioReorderQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const projectReorderQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => { setOrderedScenarios(scenarios); }, [scenarios]);
   useEffect(() => { setOrderedProjects(projects); }, [projects]);
 
-  const handleDragEnd = async (result: DropResult) => {
+  const handleDragEnd = (result: DropResult) => {
     if (!result.destination || result.destination.index === result.source.index) return;
     const reordered = [...orderedScenarios];
     const [moved] = reordered.splice(result.source.index, 1);
     reordered.splice(result.destination.index, 0, moved);
     setOrderedScenarios(reordered);
-    await api.reorderScenarios(reordered.map((s) => s.id));
+
+    scenarioReorderQueueRef.current = scenarioReorderQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          await api.reorderScenarios(reordered.map((s) => s.id));
+        } catch {
+          await refreshScenarios();
+          toast.error(t("common.error"));
+        }
+      });
   };
 
-  const handleProjectDragEnd = async (result: DropResult) => {
+  const handleProjectDragEnd = (result: DropResult) => {
     if (!result.destination || result.destination.index === result.source.index) return;
     const reordered = [...orderedProjects];
     const [moved] = reordered.splice(result.source.index, 1);
     reordered.splice(result.destination.index, 0, moved);
     setOrderedProjects(reordered);
-    await api.reorderProjects(reordered.map((p) => p.id));
+
+    projectReorderQueueRef.current = projectReorderQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          await api.reorderProjects(reordered.map((p) => p.id));
+        } catch {
+          await refreshProjects();
+          toast.error(t("common.error"));
+        }
+      });
   };
 
   const NAV_ITEMS = [
