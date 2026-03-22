@@ -530,23 +530,27 @@ impl SkillStore {
 
     pub fn reorder_scenarios(&self, ids: &[String]) -> Result<()> {
         let conn = self.conn.lock().unwrap();
+        let tx = conn.unchecked_transaction()?;
         for (i, id) in ids.iter().enumerate() {
-            conn.execute(
+            tx.execute(
                 "UPDATE scenarios SET sort_order = ?1 WHERE id = ?2",
                 params![i as i32, id],
             )?;
         }
+        tx.commit()?;
         Ok(())
     }
 
     pub fn reorder_projects(&self, ids: &[String]) -> Result<()> {
         let conn = self.conn.lock().unwrap();
+        let tx = conn.unchecked_transaction()?;
         for (i, id) in ids.iter().enumerate() {
-            conn.execute(
+            tx.execute(
                 "UPDATE projects SET sort_order = ?1 WHERE id = ?2",
                 params![i as i32, id],
             )?;
         }
+        tx.commit()?;
         Ok(())
     }
 
