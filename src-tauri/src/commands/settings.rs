@@ -112,13 +112,29 @@ pub async fn check_app_update(app: tauri::AppHandle) -> Result<AppUpdateInfo, Ap
 }
 
 #[tauri::command]
-pub fn app_exit(app: tauri::AppHandle) {
-    app.exit(0);
+pub async fn app_exit(app: tauri::AppHandle) {
+    let app_for_main = app.clone();
+    if let Err(err) = app.run_on_main_thread(move || crate::quit_app(&app_for_main)) {
+        log::error!("Failed to schedule app_exit on main thread: {err}");
+        crate::quit_app(&app);
+    }
 }
 
 #[tauri::command]
-pub async fn hide_to_tray(window: tauri::WebviewWindow) -> Result<(), AppError> {
-    window.hide().map_err(|e| AppError::io(e.to_string()))
+pub async fn hide_to_tray(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), AppError> {
+    window.hide().map_err(|e| AppError::io(e.to_string()))?;
+    // On macOS, avoid app.hide() (app-level hidden state can block restore in tray flow).
+    // Keep app running and hide only the window + Dock icon.
+    #[cfg(target_os = "macos")]
+    {
+        app.set_dock_visibility(false)
+            .map_err(|e| AppError::io(format!("Failed to hide Dock icon on macOS: {e}")))?;
+        app.set_activation_policy(tauri::ActivationPolicy::Accessory)
+            .map_err(|e| AppError::io(format!("Failed to set activation policy to Accessory: {e}")))?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+    Ok(())
 }
 
 fn version_gt(a: &str, b: &str) -> bool {

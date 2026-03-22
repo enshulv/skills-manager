@@ -1,8 +1,78 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
 mod commands;
 mod core;
+
+/// Shared flag: when true, CloseRequested should NOT be prevented.
+pub static QUITTING: AtomicBool = AtomicBool::new(false);
+
+fn restore_main_window(app: &tauri::AppHandle) {
+    let app_for_main = app.clone();
+    if let Err(err) = app.run_on_main_thread(move || {
+        #[cfg(target_os = "macos")]
+        {
+            if let Err(err) = app_for_main.set_dock_visibility(true) {
+                log::error!("Failed to show Dock icon on macOS: {err}");
+            }
+            if let Err(err) = app_for_main.set_activation_policy(tauri::ActivationPolicy::Regular) {
+                log::error!("Failed to set activation policy to Regular on macOS: {err}");
+            }
+            if let Err(err) = app_for_main.show() {
+                log::error!("Failed to show app on macOS: {err}");
+            }
+        }
+
+        if let Some(w) = app_for_main.get_webview_window("main") {
+            if let Err(err) = w.show() {
+                log::error!("Failed to show main window: {err}");
+            }
+            if let Err(err) = w.unminimize() {
+                log::error!("Failed to unminimize main window: {err}");
+            }
+            if let Err(err) = w.set_focus() {
+                log::error!("Failed to focus main window: {err}");
+            }
+        } else {
+            log::error!("Main window not found while restoring from tray");
+        }
+    }) {
+        log::error!("Failed to schedule restore_main_window on main thread: {err}");
+    }
+}
+
+fn request_quit(app: &tauri::AppHandle) {
+    let app_for_main = app.clone();
+    if let Err(err) = app.run_on_main_thread(move || {
+        quit_app(&app_for_main);
+    }) {
+        log::error!("Failed to schedule quit on main thread: {err}");
+        // Fallback: attempt quit anyway.
+        quit_app(app);
+    }
+}
+
+/// Quit the application cleanly: destroy the main window, then exit.
+/// In dev mode, also kill sibling processes in the same process group
+/// so that `tauri dev`'s beforeDevCommand (vite) gets cleaned up.
+pub fn quit_app(app: &tauri::AppHandle) {
+    QUITTING.store(true, Ordering::SeqCst);
+    if let Some(w) = app.get_webview_window("main") {
+        if let Err(err) = w.destroy() {
+            log::error!("Failed to destroy main window while quitting: {err}");
+        }
+    }
+    // In dev mode, kill sibling processes (vite dev server) by signaling the process group.
+    // Uses libc directly to avoid platform-specific `kill` command syntax differences.
+    #[cfg(unix)]
+    unsafe {
+        // getpgrp() returns our process group ID; kill(-pgid, SIGTERM) sends to all in the group.
+        let pgid = libc::getpgrp();
+        libc::kill(-pgid, libc::SIGTERM);
+    }
+    app.exit(0);
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -22,11 +92,7 @@ pub fn run() {
         .manage(store)
         .manage(cancel_registry)
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            restore_main_window(app);
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -49,41 +115,50 @@ pub fn run() {
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
-            let _tray = TrayIconBuilder::new()
+            let mut builder = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("Skills Manager")
                 .menu(&menu)
-                .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
+                        log::info!("Tray menu clicked: show");
+                        restore_main_window(app)
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        log::info!("Tray menu clicked: quit");
+                        request_quit(app)
+                    }
                     _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                });
+
+            // On macOS, left-click on tray icon opens the menu by default;
+            // on Windows/Linux, left-click restores the window directly.
+            if !cfg!(target_os = "macos") {
+                builder = builder
+                    .show_menu_on_left_click(false)
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            restore_main_window(tray.app_handle());
                         }
-                    }
-                })
-                .build(app)?;
+                    });
+            }
+
+            let _tray = builder.build(app)?;
 
             // Intercept window close — let frontend decide (close vs hide to tray)
+            // When QUITTING is set, allow the close to proceed so the process fully exits.
             let win = app.get_webview_window("main").unwrap();
             let win_for_event = win.clone();
             win.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if QUITTING.load(Ordering::SeqCst) {
+                        return; // allow close
+                    }
                     win_for_event.emit("window-close-requested", ()).ok();
                     api.prevent_close();
                 }

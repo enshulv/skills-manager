@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -12,6 +12,11 @@ interface Props {
 export function CloseActionDialog({ open, onCancel, onClose, onHide }: Props) {
   const { t } = useTranslation();
   const [remember, setRemember] = useState(false);
+
+  // Reset remember state each time dialog opens
+  useEffect(() => {
+    if (open) setRemember(false);
+  }, [open]);
 
   if (!open) return null;
 

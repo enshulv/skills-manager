@@ -42,3 +42,6 @@ urlencoding = "2"
 zip = "2"
 tempfile = "3.26.0"
 semver = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
