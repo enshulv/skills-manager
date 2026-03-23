@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-03-23
+
+### Added
+- Multi-select batch operations for skills and project skills
+- Per-scenario skill-agent toggles for fine-grained control
+- Auto-create Default scenario when no scenarios exist
+
+### Fixed
+- Improved batch operation resilience and export selection handling
 ## [1.8.0] - 2026-03-23
 
 ### Added
