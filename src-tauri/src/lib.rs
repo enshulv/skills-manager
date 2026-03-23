@@ -473,9 +473,22 @@ pub fn run() {
 }
 
 fn initialize_startup_scenario(store: &Arc<core::skill_store::SkillStore>) -> Result<(), String> {
-    let scenarios = store.get_all_scenarios().map_err(|e| e.to_string())?;
+    let mut scenarios = store.get_all_scenarios().map_err(|e| e.to_string())?;
     if scenarios.is_empty() {
-        return Ok(());
+        let now = chrono::Utc::now().timestamp_millis();
+        let default_scenario = core::skill_store::ScenarioRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "Default".to_string(),
+            description: Some("Default startup scenario".to_string()),
+            icon: None,
+            sort_order: 0,
+            created_at: now,
+            updated_at: now,
+        };
+        store
+            .insert_scenario(&default_scenario)
+            .map_err(|e| e.to_string())?;
+        scenarios.push(default_scenario);
     }
 
     let current_active = store.get_active_scenario_id().map_err(|e| e.to_string())?;
