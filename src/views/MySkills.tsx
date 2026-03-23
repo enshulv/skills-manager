@@ -25,8 +25,10 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { cn } from "../utils";
 import { useApp } from "../context/AppContext";
+import { useMultiSelect } from "../hooks/useMultiSelect";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SkillDetailPanel } from "../components/SkillDetailPanel";
+import { MultiSelectToolbar } from "../components/MultiSelectToolbar";
 import * as api from "../lib/tauri";
 import type { ManagedSkill, ToolInfo, GitBackupStatus, GitBackupVersion } from "../lib/tauri";
 import { getErrorMessage, getErrorKind } from "../lib/error";
@@ -64,6 +66,7 @@ export function MySkills() {
   const [allTags, setAllTags] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ManagedSkill | null>(null);
+  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
   const [syncingSkillId, setSyncingSkillId] = useState<string | null>(null);
   const [checkingAll, setCheckingAll] = useState(false);
   const [checkingSkillId, setCheckingSkillId] = useState<string | null>(null);
@@ -79,9 +82,6 @@ export function MySkills() {
   const [tagEditSkillId, setTagEditSkillId] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState("");
   const tagInputRef = useRef<HTMLInputElement>(null);
-  const [isMultiSelect, setIsMultiSelect] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
 
   const installedTools = tools.filter((tool) => tool.installed && tool.enabled);
   const activeScenarioName = activeScenario?.name || t("mySkills.currentScenarioFallback");
@@ -136,6 +136,21 @@ export function MySkills() {
 
     return result;
   }, [skills, search, sourceFilters, tagFilters, filterMode, activeScenario]);
+
+  const {
+    isMultiSelect, setIsMultiSelect,
+    selectedIds,
+    toggleSelect,
+    isAllSelected,
+    anyDisabled,
+    handleSelectAll,
+    exitMultiSelect,
+  } = useMultiSelect({
+    items: skills,
+    filtered,
+    getKey: (s) => s.id,
+    isItemActive: (s) => activeScenario ? s.scenario_ids.includes(activeScenario.id) : true,
+  });
 
   const selectedSkill = useMemo(
     () => skills.find((skill) => skill.id === detailSkillId) || null,
@@ -320,37 +335,43 @@ export function MySkills() {
     await Promise.all([refreshManagedSkills(), refreshScenarios()]);
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const handleBatchDelete = async () => {
     const ids = Array.from(selectedIds);
-    let deleted = 0;
-    for (const id of ids) {
-      try {
+    try {
+      for (const id of ids) {
         await api.deleteManagedSkill(id);
         if (selectedSkill?.id === id) closeSkillDetail();
-        deleted++;
-      } catch {
-        // continue deleting remaining
       }
+      toast.success(t("mySkills.batchDeleted", { count: ids.length }));
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, t("common.error")));
+    } finally {
+      exitMultiSelect();
+      setBatchDeleteConfirm(false);
+      await Promise.all([refreshManagedSkills(), refreshScenarios()]);
     }
-    if (deleted < ids.length) {
-      toast.error(t("mySkills.batchDeleteFailed", { count: ids.length - deleted }));
+  };
+
+  const handleBatchToggleScenario = async () => {
+    if (!activeScenario) return;
+    const selectedSkillsList = skills.filter((s) => selectedIds.has(s.id));
+    try {
+      for (const skill of selectedSkillsList) {
+        const enabledInScenario = skill.scenario_ids.includes(activeScenario.id);
+        if (anyDisabled && !enabledInScenario) {
+          await api.addSkillToScenario(skill.id, activeScenario.id);
+        } else if (!anyDisabled && enabledInScenario) {
+          await api.removeSkillFromScenario(skill.id, activeScenario.id);
+        }
+      }
+      toast.success(anyDisabled
+        ? t("mySkills.batchEnabled", { count: selectedIds.size })
+        : t("mySkills.batchDisabled", { count: selectedIds.size }));
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, t("common.error")));
+    } finally {
+      await Promise.all([refreshManagedSkills(), refreshScenarios()]);
     }
-    if (deleted > 0) {
-      toast.success(t("mySkills.batchDeleted", { count: deleted }));
-    }
-    setSelectedIds(new Set());
-    setIsMultiSelect(false);
-    setBatchDeleteConfirm(false);
-    await Promise.all([refreshManagedSkills(), refreshScenarios()]);
   };
 
   const handleToggleScenario = async (skill: ManagedSkill) => {
@@ -545,13 +566,6 @@ export function MySkills() {
         label: t("mySkills.gitRepoNeedRemote"),
         disabled: true,
         toneClassName: "text-red-500",
-      };
-    }
-    if (gitStatus.behind > 0 && (gitStatus.has_changes || gitStatus.ahead > 0)) {
-      return {
-        label: t("mySkills.gitRepoSync"),
-        disabled: false,
-        toneClassName: "text-amber-500",
       };
     }
     if (gitStatus.has_changes || gitStatus.ahead > 0 || gitStatus.behind > 0) {
@@ -766,7 +780,7 @@ export function MySkills() {
             <List className="h-4 w-4" />
           </button>
           <button
-            onClick={() => { setIsMultiSelect((v) => !v); setSelectedIds(new Set()); }}
+            onClick={() => isMultiSelect ? exitMultiSelect() : setIsMultiSelect(true)}
             className={cn(
               "rounded-md p-2 transition-colors outline-none",
               isMultiSelect ? "bg-surface-active text-secondary" : "text-muted hover:text-tertiary"
@@ -837,28 +851,26 @@ export function MySkills() {
       </div>
 
       {isMultiSelect && (
-        <div className="flex items-center gap-2 px-1 py-1.5">
-          <span className="text-[13px] text-muted">
-            {selectedIds.size > 0
-              ? t("mySkills.selectedCount", { count: selectedIds.size })
-              : t("mySkills.selectHint")}
-          </span>
-          {selectedIds.size > 0 && (
-            <button
-              onClick={() => setBatchDeleteConfirm(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-red-600/90 px-2.5 py-1 text-[13px] font-medium text-white hover:bg-red-500 transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {t("mySkills.deleteSelected", { count: selectedIds.size })}
-            </button>
-          )}
-          <button
-            onClick={() => { setIsMultiSelect(false); setSelectedIds(new Set()); }}
-            className="rounded-md px-2.5 py-1 text-[13px] font-medium text-muted hover:text-secondary hover:bg-surface-hover transition-colors"
-          >
-            {t("common.cancel")}
-          </button>
-        </div>
+        <MultiSelectToolbar
+          selectedCount={selectedIds.size}
+          isAllSelected={isAllSelected}
+          anyDisabled={activeScenario ? anyDisabled : false}
+          showToggle={!!activeScenario}
+          labels={{
+            hint: t("mySkills.selectHint"),
+            selected: t("mySkills.selectedCount", { count: selectedIds.size }),
+            delete: t("mySkills.deleteSelected", { count: selectedIds.size }),
+            enable: t("mySkills.batchEnable", { count: selectedIds.size }),
+            disable: t("mySkills.batchDisable", { count: selectedIds.size }),
+            selectAll: t("mySkills.selectAll"),
+            deselectAll: t("mySkills.deselectAll"),
+            cancel: t("common.cancel"),
+          }}
+          onDelete={() => setBatchDeleteConfirm(true)}
+          onToggle={handleBatchToggleScenario}
+          onSelectAll={handleSelectAll}
+          onCancel={exitMultiSelect}
+        />
       )}
 
       {gitVersionsOpen && gitStatus?.is_repo && (

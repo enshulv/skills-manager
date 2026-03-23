@@ -161,7 +161,13 @@
     "batchDeleteConfirm": "确定彻底删除选中的 {{count}} 个 Skill 吗？中央仓库文件、场景关联和已同步到各 Agent 的目标都会被移除。",
     "batchDeleted": "已删除 {{count}} 个 Skill",
     "batchDeleteFailed": "{{count}} 个 Skill 删除失败",
-    "cancelSelect": "取消多选"
+    "cancelSelect": "取消多选",
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
+    "batchEnable": "启用 {{count}} 个",
+    "batchDisable": "停用 {{count}} 个",
+    "batchEnabled": "已启用 {{count}} 个 Skill",
+    "batchDisabled": "已停用 {{count}} 个 Skill"
   },
   "install": {
     "title": "安装 Skills",
@@ -465,8 +471,21 @@
     "searchCenterSkills": "搜索中央仓库中的 Skills...",
     "noSkillsToExport": "中央仓库中没有可更新到项目的 Skill",
     "import": "更新",
+    "updateSelected": "更新 {{count}} 个",
+    "batchImported": "已更新 {{count}} 个 Skill",
     "deleteSkill": "删除 Skill",
     "deleteSkillConfirm": "确定永久删除 Skill \"{{name}}\" 吗？此操作不可恢复。",
-    "skillDeleted": "\"{{name}}\" 已删除"
+    "skillDeleted": "\"{{name}}\" 已删除",
+    "selectMode": "多选",
+    "cancelSelect": "退出多选",
+    "selectedCount": "已选 {{count}} 个",
+    "selectHint": "点击 Skill 开始选择",
+    "deleteSelected": "删除 {{count}} 个",
+    "batchDeleteConfirm": "确定永久删除选中的 {{count}} 个 Skill 吗？此操作不可恢复。",
+    "batchDeleted": "已删除 {{count}} 个 Skill",
+    "batchEnable": "启用 {{count}} 个",
+    "batchDisable": "停用 {{count}} 个",
+    "batchEnabled": "已启用 {{count}} 个 Skill",
+    "batchDisabled": "已停用 {{count}} 个 Skill"
   }
 }

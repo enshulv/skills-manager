@@ -14,12 +14,16 @@ import {
   X,
   Loader2,
   Trash2,
+  SquareCheck,
+  Square,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
+import { useMultiSelect } from "../hooks/useMultiSelect";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { MultiSelectToolbar } from "../components/MultiSelectToolbar";
 import { SkillMarkdown } from "../components/SkillMarkdown";
 import { cn } from "../utils";
 import * as api from "../lib/tauri";
@@ -74,6 +78,7 @@ export function ProjectDetail() {
   const [togglingSkill, setTogglingSkill] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSkill | null>(null);
+  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
 
   const project = projects.find((p) => p.id === id);
 
@@ -111,6 +116,21 @@ export function ProjectDetail() {
       return true;
     });
   }, [skills, search, filterMode]);
+
+  const {
+    isMultiSelect, setIsMultiSelect,
+    selectedIds,
+    toggleSelect,
+    isAllSelected,
+    anyDisabled,
+    handleSelectAll,
+    exitMultiSelect,
+  } = useMultiSelect({
+    items: skills,
+    filtered,
+    getKey: (s) => s.dir_name,
+    isItemActive: (s) => s.enabled,
+  });
 
   const enabledCount = skills.filter((s) => s.enabled).length;
 
@@ -191,6 +211,21 @@ export function ProjectDetail() {
     }
   };
 
+  const handleBatchExportFromCenter = async (skills: ManagedSkill[]) => {
+    if (!id) return;
+    try {
+      for (const skill of skills) {
+        await api.exportSkillToProject(skill.id, id);
+      }
+      toast.success(t("project.batchImported", { count: skills.length }));
+      setShowExportDialog(false);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, t("common.error")));
+    } finally {
+      await loadSkills();
+    }
+  };
+
   const handleDeleteSkill = async () => {
     if (!id || !deleteTarget) return;
     try {
@@ -199,6 +234,44 @@ export function ProjectDetail() {
       await loadSkills();
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, t("common.error")));
+    }
+  };
+
+  const handleBatchDeleteProject = async () => {
+    if (!id) return;
+    const dirNames = Array.from(selectedIds);
+    try {
+      for (const dirName of dirNames) {
+        await api.deleteProjectSkill(id, dirName);
+      }
+      toast.success(t("project.batchDeleted", { count: dirNames.length }));
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, t("common.error")));
+    } finally {
+      exitMultiSelect();
+      setBatchDeleteConfirm(false);
+      await loadSkills();
+    }
+  };
+
+  const handleBatchToggleProject = async () => {
+    if (!id) return;
+    const selectedSkillsList = skills.filter((s) => selectedIds.has(s.dir_name));
+    try {
+      for (const skill of selectedSkillsList) {
+        if (anyDisabled && !skill.enabled) {
+          await api.toggleProjectSkill(id, skill.dir_name, true);
+        } else if (!anyDisabled && skill.enabled) {
+          await api.toggleProjectSkill(id, skill.dir_name, false);
+        }
+      }
+      toast.success(anyDisabled
+        ? t("project.batchEnabled", { count: selectedIds.size })
+        : t("project.batchDisabled", { count: selectedIds.size }));
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, t("common.error")));
+    } finally {
+      await loadSkills();
     }
   };
 
@@ -281,8 +354,41 @@ export function ProjectDetail() {
           >
             <List className="h-4 w-4" />
           </button>
+          <button
+            onClick={() => isMultiSelect ? exitMultiSelect() : setIsMultiSelect(true)}
+            className={cn(
+              "rounded-md p-2 transition-colors outline-none",
+              isMultiSelect ? "bg-surface-active text-secondary" : "text-muted hover:text-tertiary"
+            )}
+            title={isMultiSelect ? t("project.cancelSelect") : t("project.selectMode")}
+          >
+            <SquareCheck className="h-4 w-4" />
+          </button>
         </div>
       </div>
+
+      {isMultiSelect && (
+        <MultiSelectToolbar
+          selectedCount={selectedIds.size}
+          isAllSelected={isAllSelected}
+          anyDisabled={anyDisabled}
+          showToggle={true}
+          labels={{
+            hint: t("project.selectHint"),
+            selected: t("project.selectedCount", { count: selectedIds.size }),
+            delete: t("project.deleteSelected", { count: selectedIds.size }),
+            enable: t("project.batchEnable", { count: selectedIds.size }),
+            disable: t("project.batchDisable", { count: selectedIds.size }),
+            selectAll: t("project.selectAll"),
+            deselectAll: t("project.deselectAll"),
+            cancel: t("common.cancel"),
+          }}
+          onDelete={() => setBatchDeleteConfirm(true)}
+          onToggle={handleBatchToggleProject}
+          onSelectAll={handleSelectAll}
+          onCancel={exitMultiSelect}
+        />
+      )}
 
       {loading ? (
         <div className="flex flex-1 flex-col items-center justify-center pb-20 text-center">
@@ -308,6 +414,7 @@ export function ProjectDetail() {
           )}
         >
           {filtered.map((skill) => {
+            const isSelected = selectedIds.has(skill.dir_name);
             const isUpdatingCenter = updatingCenterSkill === skill.dir_name;
             const isUpdatingProject = updatingProjectSkill === skill.dir_name;
             const isToggling = togglingSkill === skill.dir_name;
@@ -328,13 +435,22 @@ export function ProjectDetail() {
                   className={cn(
                     "app-panel group relative flex flex-col overflow-hidden transition-all hover:border-border hover:bg-surface-hover",
                     skill.enabled && "border-l-2 border-l-accent",
-                    !skill.enabled && "opacity-60"
+                    !skill.enabled && "opacity-60",
+                    isMultiSelect && "cursor-pointer",
+                    isMultiSelect && isSelected && "ring-1 ring-accent border-accent/40"
                   )}
+                  onClick={isMultiSelect ? () => toggleSelect(skill.dir_name) : undefined}
                 >
                   <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-1.5">
+                    {isMultiSelect && (
+                      isSelected
+                        ? <SquareCheck className="h-3.5 w-3.5 shrink-0 text-accent" />
+                        : <Square className="h-3.5 w-3.5 shrink-0 text-faint" />
+                    )}
                     <h3
-                      className="flex-1 cursor-pointer truncate text-[14px] font-semibold text-primary hover:text-accent-light"
-                      onClick={() => handleOpenDetail(skill)}
+                      className="flex-1 truncate text-[14px] font-semibold text-primary"
+                      onClick={!isMultiSelect ? () => handleOpenDetail(skill) : undefined}
+                      style={!isMultiSelect ? { cursor: "pointer" } : undefined}
                       title={skill.name}
                     >
                       {skill.name}
@@ -364,67 +480,69 @@ export function ProjectDetail() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {canUpdateCenter && (
+                    {!isMultiSelect && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {canUpdateCenter && (
+                          <button
+                            onClick={() => handleUpdateCenter(skill)}
+                            disabled={isUpdatingCenter || isUpdatingProject}
+                            className="rounded px-2 py-1 text-[13px] font-medium text-muted transition-colors outline-none hover:bg-surface-hover hover:text-secondary disabled:opacity-50"
+                            title={t("project.updateCenter")}
+                          >
+                            {isUpdatingCenter ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
+                        {canUpdateProject && (
+                          <button
+                            onClick={() => handleUpdateProject(skill)}
+                            disabled={isUpdatingCenter || isUpdatingProject}
+                            className="rounded px-2 py-1 text-[13px] font-medium text-muted transition-colors outline-none hover:bg-surface-hover hover:text-secondary disabled:opacity-50"
+                            title={
+                              skill.sync_status === "project_newer"
+                                ? t("project.resetFromCenter")
+                                : t("project.updateProject")
+                            }
+                          >
+                            {isUpdatingProject ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : skill.sync_status === "project_newer" ? (
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
                         <button
-                          onClick={() => handleUpdateCenter(skill)}
-                          disabled={isUpdatingCenter || isUpdatingProject}
-                          className="rounded px-2 py-1 text-[13px] font-medium text-muted transition-colors outline-none hover:bg-surface-hover hover:text-secondary disabled:opacity-50"
-                          title={t("project.updateCenter")}
+                          onClick={() => handleToggleSkill(skill)}
+                          disabled={isToggling}
+                          className={cn(
+                            "rounded px-2 py-1 text-[13px] font-medium transition-colors outline-none",
+                            skill.enabled
+                              ? "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                              : "text-muted hover:bg-surface-hover hover:text-secondary"
+                          )}
                         >
-                          {isUpdatingCenter ? (
+                          {isToggling ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : skill.enabled ? (
+                            t("project.enabled")
                           ) : (
-                            <Upload className="h-3.5 w-3.5" />
+                            t("project.enableSkill")
                           )}
                         </button>
-                      )}
-                      {canUpdateProject && (
                         <button
-                          onClick={() => handleUpdateProject(skill)}
-                          disabled={isUpdatingCenter || isUpdatingProject}
-                          className="rounded px-2 py-1 text-[13px] font-medium text-muted transition-colors outline-none hover:bg-surface-hover hover:text-secondary disabled:opacity-50"
-                          title={
-                            skill.sync_status === "project_newer"
-                              ? t("project.resetFromCenter")
-                              : t("project.updateProject")
-                          }
+                          onClick={() => setDeleteTarget(skill)}
+                          className="rounded px-2 py-1 text-muted transition-colors outline-none opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500"
+                          title={t("project.deleteSkill")}
                         >
-                          {isUpdatingProject ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : skill.sync_status === "project_newer" ? (
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      )}
-                      <button
-                        onClick={() => handleToggleSkill(skill)}
-                        disabled={isToggling}
-                        className={cn(
-                          "rounded px-2 py-1 text-[13px] font-medium transition-colors outline-none",
-                          skill.enabled
-                            ? "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-                            : "text-muted hover:bg-surface-hover hover:text-secondary"
-                        )}
-                      >
-                        {isToggling ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : skill.enabled ? (
-                          t("project.enabled")
-                        ) : (
-                          t("project.enableSkill")
-                        )}
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(skill)}
-                        className="rounded px-2 py-1 text-muted transition-colors outline-none opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500"
-                        title={t("project.deleteSkill")}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -437,12 +555,21 @@ export function ProjectDetail() {
                 className={cn(
                   "app-panel group flex items-center gap-3.5 rounded-xl border-transparent px-3.5 py-3 transition-all hover:border-border hover:bg-surface-hover",
                   skill.enabled && "border-l-2 border-l-accent",
-                  !skill.enabled && "opacity-60"
+                  !skill.enabled && "opacity-60",
+                  isMultiSelect && "cursor-pointer",
+                  isMultiSelect && isSelected && "ring-1 ring-accent border-accent/40"
                 )}
+                onClick={isMultiSelect ? () => toggleSelect(skill.dir_name) : undefined}
               >
+                {isMultiSelect && (
+                  isSelected
+                    ? <SquareCheck className="h-3.5 w-3.5 shrink-0 text-accent" />
+                    : <Square className="h-3.5 w-3.5 shrink-0 text-faint" />
+                )}
                 <h3
-                  className="w-[180px] shrink-0 truncate cursor-pointer text-[14px] font-semibold text-secondary hover:text-primary"
-                  onClick={() => handleOpenDetail(skill)}
+                  className="w-[180px] shrink-0 truncate text-[14px] font-semibold text-secondary"
+                  onClick={!isMultiSelect ? () => handleOpenDetail(skill) : undefined}
+                  style={!isMultiSelect ? { cursor: "pointer" } : undefined}
                   title={skill.name}
                 >
                   {skill.name}
@@ -469,67 +596,69 @@ export function ProjectDetail() {
                   )}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  {canUpdateCenter && (
+                {!isMultiSelect && (
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    {canUpdateCenter && (
+                      <button
+                        onClick={() => handleUpdateCenter(skill)}
+                        disabled={isUpdatingCenter || isUpdatingProject}
+                        className="rounded p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-secondary disabled:opacity-50"
+                        title={t("project.updateCenter")}
+                      >
+                        {isUpdatingCenter ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
+                    {canUpdateProject && (
+                      <button
+                        onClick={() => handleUpdateProject(skill)}
+                        disabled={isUpdatingCenter || isUpdatingProject}
+                        className="rounded p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-secondary disabled:opacity-50"
+                        title={
+                          skill.sync_status === "project_newer"
+                            ? t("project.resetFromCenter")
+                            : t("project.updateProject")
+                        }
+                      >
+                        {isUpdatingProject ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : skill.sync_status === "project_newer" ? (
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleUpdateCenter(skill)}
-                      disabled={isUpdatingCenter || isUpdatingProject}
-                      className="rounded p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-secondary disabled:opacity-50"
-                      title={t("project.updateCenter")}
+                      onClick={() => handleToggleSkill(skill)}
+                      disabled={isToggling}
+                      className={cn(
+                        "rounded px-2 py-0.5 text-[13px] font-medium transition-colors outline-none",
+                        skill.enabled
+                          ? "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                          : "text-muted hover:bg-surface-hover hover:text-secondary"
+                      )}
                     >
-                      {isUpdatingCenter ? (
+                      {isToggling ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : skill.enabled ? (
+                        t("project.enabled")
                       ) : (
-                        <Upload className="h-3.5 w-3.5" />
+                        t("project.enableSkill")
                       )}
                     </button>
-                  )}
-                  {canUpdateProject && (
                     <button
-                      onClick={() => handleUpdateProject(skill)}
-                      disabled={isUpdatingCenter || isUpdatingProject}
-                      className="rounded p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-secondary disabled:opacity-50"
-                      title={
-                        skill.sync_status === "project_newer"
-                          ? t("project.resetFromCenter")
-                          : t("project.updateProject")
-                      }
+                      onClick={() => setDeleteTarget(skill)}
+                      className="rounded p-0.5 text-muted transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      title={t("project.deleteSkill")}
                     >
-                      {isUpdatingProject ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : skill.sync_status === "project_newer" ? (
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      ) : (
-                        <Download className="h-3.5 w-3.5" />
-                      )}
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
-                  )}
-                  <button
-                    onClick={() => handleToggleSkill(skill)}
-                    disabled={isToggling}
-                    className={cn(
-                      "rounded px-2 py-0.5 text-[13px] font-medium transition-colors outline-none",
-                      skill.enabled
-                        ? "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-                        : "text-muted hover:bg-surface-hover hover:text-secondary"
-                    )}
-                  >
-                    {isToggling ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : skill.enabled ? (
-                      t("project.enabled")
-                    ) : (
-                      t("project.enableSkill")
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(skill)}
-                    className="rounded p-0.5 text-muted transition-colors hover:bg-red-500/10 hover:text-red-500"
-                    title={t("project.deleteSkill")}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -556,12 +685,23 @@ export function ProjectDetail() {
         onConfirm={handleDeleteSkill}
       />
 
+      {/* Batch Delete Confirm Dialog */}
+      <ConfirmDialog
+        open={batchDeleteConfirm}
+        title={t("project.deleteSkill")}
+        message={t("project.batchDeleteConfirm", { count: selectedIds.size })}
+        tone="danger"
+        onClose={() => setBatchDeleteConfirm(false)}
+        onConfirm={handleBatchDeleteProject}
+      />
+
       {/* Export from Center Dialog */}
       {showExportDialog && id && (
         <ExportFromCenterDialog
           managedSkills={managedSkills}
           projectSkillDirNames={skills.map((s) => s.dir_name.toLowerCase())}
           onExport={handleExportFromCenter}
+          onBatchExport={handleBatchExportFromCenter}
           onClose={() => setShowExportDialog(false)}
         />
       )}
@@ -632,16 +772,19 @@ function ExportFromCenterDialog({
   managedSkills,
   projectSkillDirNames,
   onExport,
+  onBatchExport,
   onClose,
 }: {
   managedSkills: ManagedSkill[];
   projectSkillDirNames: string[];
   onExport: (skill: ManagedSkill) => Promise<void>;
+  onBatchExport: (skills: ManagedSkill[]) => Promise<void>;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [exporting, setExporting] = useState<string | null>(null);
+  const [batchExporting, setBatchExporting] = useState(false);
   const [dirNameMap, setDirNameMap] = useState<Record<string, string>>({});
   const [dirNameMapError, setDirNameMapError] = useState(false);
 
@@ -684,12 +827,40 @@ function ExportFromCenterDialog({
     return matchesSearch;
   });
 
+  const isAlreadyExists = (skill: ManagedSkill) => {
+    const exportDirName = dirNameMap[skill.id];
+    return dirNameMapError ? true : (exportDirName ? projectSkillDirNames.includes(exportDirName) : false);
+  };
+
+  const {
+    isMultiSelect, setIsMultiSelect,
+    selectedIds,
+    toggleSelect,
+    exitMultiSelect,
+  } = useMultiSelect({
+    items: managedSkills,
+    filtered: filtered.filter((s) => !isAlreadyExists(s)),
+    getKey: (s) => s.id,
+    isItemActive: () => true,
+  });
+
   const handleExport = async (skill: ManagedSkill) => {
     setExporting(skill.id);
     try {
       await onExport(skill);
     } finally {
       setExporting(null);
+    }
+  };
+
+  const handleBatchExport = async () => {
+    const selected = managedSkills.filter((s) => selectedIds.has(s.id));
+    if (selected.length === 0) return;
+    setBatchExporting(true);
+    try {
+      await onBatchExport(selected);
+    } finally {
+      setBatchExporting(false);
     }
   };
 
@@ -710,19 +881,42 @@ function ExportFromCenterDialog({
         </div>
 
         <div className="px-5 py-3 border-b border-border-subtle">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("project.searchCenterSkills")}
-              className="app-input w-full pl-9 font-medium"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              autoFocus
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("project.searchCenterSkills")}
+                className="app-input w-full pl-9 font-medium"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus
+              />
+            </div>
+            {selectedIds.size > 0 && isMultiSelect && (
+              <button
+                onClick={handleBatchExport}
+                disabled={batchExporting}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+              >
+                {batchExporting
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : t("project.updateSelected", { count: selectedIds.size })}
+              </button>
+            )}
+            <button
+              onClick={() => isMultiSelect ? exitMultiSelect() : setIsMultiSelect(true)}
+              className={cn(
+                "shrink-0 rounded-md p-2 transition-colors outline-none",
+                isMultiSelect ? "bg-surface-active text-secondary" : "text-muted hover:text-tertiary hover:bg-surface-hover"
+              )}
+              title={isMultiSelect ? t("project.cancelSelect") : t("project.selectMode")}
+            >
+              <SquareCheck className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
@@ -734,15 +928,24 @@ function ExportFromCenterDialog({
           ) : (
             <div className="divide-y divide-border-subtle">
               {filtered.map((skill) => {
-                const exportDirName = dirNameMap[skill.id];
-                const alreadyExists = dirNameMapError
-                  ? true
-                  : (exportDirName ? projectSkillDirNames.includes(exportDirName) : false);
+                const alreadyExists = isAlreadyExists(skill);
+                const isSelected = selectedIds.has(skill.id);
+                const selectable = isMultiSelect && !alreadyExists;
                 return (
                   <div
                     key={skill.id}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-surface-hover transition-colors"
+                    className={cn(
+                      "flex items-center gap-3 px-5 py-3 transition-colors",
+                      selectable ? "cursor-pointer hover:bg-surface-hover" : "hover:bg-surface-hover",
+                      selectable && isSelected && "bg-accent/5"
+                    )}
+                    onClick={selectable ? () => toggleSelect(skill.id) : undefined}
                   >
+                    {isMultiSelect && !alreadyExists && (
+                      isSelected
+                        ? <SquareCheck className="h-3.5 w-3.5 shrink-0 text-accent" />
+                        : <Square className="h-3.5 w-3.5 shrink-0 text-faint" />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] font-medium text-primary truncate">
                         {skill.name}
@@ -757,7 +960,7 @@ function ExportFromCenterDialog({
                       <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[12px] font-medium text-muted shrink-0">
                         {t("project.alreadyExists")}
                       </span>
-                    ) : (
+                    ) : !isMultiSelect && (
                       <button
                         onClick={() => handleExport(skill)}
                         disabled={exporting === skill.id}

@@ -161,7 +161,13 @@
     "batchDeleteConfirm": "Delete {{count}} selected skills permanently? This removes their central library files, scenario links, and synced agent targets.",
     "batchDeleted": "{{count}} skills deleted",
     "batchDeleteFailed": "{{count}} skills failed to delete",
-    "cancelSelect": "Cancel selection"
+    "cancelSelect": "Cancel selection",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "batchEnable": "Enable {{count}}",
+    "batchDisable": "Disable {{count}}",
+    "batchEnabled": "{{count}} skills enabled",
+    "batchDisabled": "{{count}} skills disabled"
   },
   "install": {
     "title": "Install Skills",
@@ -465,8 +471,21 @@
     "searchCenterSkills": "Search skills in the central library...",
     "noSkillsToExport": "No skills available to update from center",
     "import": "Update",
+    "updateSelected": "Update {{count}}",
+    "batchImported": "{{count}} skills updated",
     "deleteSkill": "Delete skill",
     "deleteSkillConfirm": "Permanently delete skill \"{{name}}\"? This action cannot be undone.",
-    "skillDeleted": "\"{{name}}\" deleted"
+    "skillDeleted": "\"{{name}}\" deleted",
+    "selectMode": "Select",
+    "cancelSelect": "Exit Select",
+    "selectedCount": "{{count}} selected",
+    "selectHint": "Click skills to select",
+    "deleteSelected": "Delete {{count}}",
+    "batchDeleteConfirm": "Permanently delete {{count}} selected skills? This action cannot be undone.",
+    "batchDeleted": "{{count}} skills deleted",
+    "batchEnable": "Enable {{count}}",
+    "batchDisable": "Disable {{count}}",
+    "batchEnabled": "{{count}} skills enabled",
+    "batchDisabled": "{{count}} skills disabled"
   }
 }
