@@ -15,11 +15,11 @@
   "help": {
     "eyebrow": "操作指南",
     "title": "快速上手 Skills Manager",
-    "description": "现在的主流程很简单：选场景、装 Skill、在“我的 Skills”里管理启用和同步。",
+    "description": "主流程是：选场景、装 Skill、在“我的 Skills”里管理启用与同步；需要环境配置时到“设置”统一处理。",
     "items": {
       "scenarios": {
         "title": "场景就是一组 Skill 组合",
-        "description": "把工作、学习、开源项目分成不同场景，每个场景维护自己的启用列表。"
+        "description": "把工作、学习、开源项目分成不同场景，每个场景维护自己的启用列表和 Agent 同步开关。"
       },
       "switching": {
         "title": "切换场景会自动切换同步结果",
@@ -34,8 +34,8 @@
         "description": "你可以决定某个 Skill 是否属于当前场景，也可以手动同步或取消同步到各个 Agent。"
       },
       "settings": {
-        "title": "设置页负责环境和偏好",
-        "description": "在设置里检查 Agent 安装状态、切换主题和语言、修改默认场景，也可以从这里重新打开这份帮助。"
+        "title": "设置页集中管理环境配置",
+        "description": "在设置里可以检查 Agent 状态、切换主题和语言、设置默认场景、配置关闭行为与托盘图标、保存代理和 Git 远程，并检查应用更新。"
       }
     }
   },

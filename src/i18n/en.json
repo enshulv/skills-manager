@@ -15,11 +15,11 @@
   "help": {
     "eyebrow": "Guide",
     "title": "Quick Start for Skills Manager",
-    "description": "The main flow is simple now: pick a scenario, install skills, then manage enablement and sync in My Skills.",
+    "description": "The core flow is: pick a scenario, install skills, and manage enablement and sync in My Skills; use Settings for environment-level configuration.",
     "items": {
       "scenarios": {
         "title": "A scenario is a curated skill setup",
-        "description": "Use separate scenarios for work, learning, or open source so each flow keeps its own enabled skills."
+        "description": "Use separate scenarios for work, learning, or open source. Each scenario keeps its own enabled skills and agent toggles."
       },
       "switching": {
         "title": "Switching scenarios also switches sync targets",
@@ -34,8 +34,8 @@
         "description": "Decide whether a skill belongs to the current scenario, then sync or unsync it for your agents."
       },
       "settings": {
-        "title": "Use Settings for environment and preferences",
-        "description": "Check detected agents, change theme or language, set the default scenario, and reopen this guide from the Settings page."
+        "title": "Use Settings as the central config hub",
+        "description": "Review agent status, change theme/language, set the default scenario, configure close action and tray icon, save proxy and Git remote, and check for app updates."
       }
     }
   },
