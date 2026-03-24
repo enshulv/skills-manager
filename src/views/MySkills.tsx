@@ -150,7 +150,6 @@ export function MySkills() {
 
   const [scenarioSkillOrder, setScenarioSkillOrder] = useState<string[]>([]);
 
-  const installedTools = tools.filter((tool) => tool.installed);
   const activeScenarioName = activeScenario?.name || t("mySkills.currentScenarioFallback");
 
   // Fetch sort order whenever active scenario changes
@@ -410,7 +409,7 @@ export function MySkills() {
     return () => {
       cancelled = true;
     };
-  }, [selectedSkill?.id, activeScenario?.id, tools]);
+  }, [selectedSkill, activeScenario]);
 
   const handleToggleSkillTool = async (toolKey: string, enabled: boolean) => {
     if (!selectedSkill || !activeScenario) return;
@@ -1364,6 +1363,7 @@ export function MySkills() {
       )}
 
       <SkillDetailPanel
+        key={selectedSkill?.id ?? "skill-detail-empty"}
         skill={selectedSkill}
         onClose={closeSkillDetail}
         toolToggles={toolToggles}

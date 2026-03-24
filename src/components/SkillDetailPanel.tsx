@@ -58,10 +58,6 @@ export function SkillDetailPanel({
       });
   }, [skill]);
 
-  useEffect(() => {
-    setIsAgentSectionExpanded(false);
-  }, [skill?.id]);
-
   if (!skill) return null;
   const activeDoc = doc?.skill_id === skill.id ? doc : null;
   const availableToggleCount =

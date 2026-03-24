@@ -31,6 +31,16 @@ import type { AppUpdateInfo } from "../lib/tauri";
 import type { Theme } from "../hooks/useTheme";
 
 const IS_WINDOWS = navigator.userAgent.includes("Windows");
+const TEXT_SIZE_ZOOM_MAP: Record<string, string> = {
+  small: "0.9",
+  default: "1",
+  large: "1.1",
+  xlarge: "1.2",
+};
+
+function applyTextSize(size: string) {
+  document.documentElement.style.zoom = TEXT_SIZE_ZOOM_MAP[size] || "1";
+}
 
 export function Settings() {
   const { t, i18n } = useTranslation();
@@ -149,17 +159,6 @@ export function Settings() {
     localStorage.setItem("language", lng);
     i18n.changeLanguage(lng);
     api.setSettings("language", lng);
-  };
-
-  const textSizeZoomMap: Record<string, string> = {
-    small: "0.9",
-    default: "1",
-    large: "1.1",
-    xlarge: "1.2",
-  };
-
-  const applyTextSize = (size: string) => {
-    document.documentElement.style.zoom = textSizeZoomMap[size] || "1";
   };
 
   const handleTextSizeChange = (size: string) => {
