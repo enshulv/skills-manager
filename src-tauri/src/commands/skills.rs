@@ -1145,8 +1145,16 @@ pub async fn check_all_skill_updates(
             if !matches!(skill.source_type.as_str(), "git" | "skillssh") {
                 continue;
             }
-            if should_skip_update_check(&store, skill, force_check)? {
-                continue;
+            match should_skip_update_check(&store, skill, force_check) {
+                Ok(true) => continue,
+                Ok(false) => {}
+                // A transient skip-decision error (e.g. a settings read) must not
+                // abort the whole batch: fall through so Phase B still checks this
+                // skill and collects any real failure per-skill, as before.
+                Err(err) => log::warn!(
+                    "check all: skip-decision for {} failed, checking anyway: {}",
+                    skill.id, err.message
+                ),
             }
             if let Ok(source) = git_source_from_skill(skill) {
                 remotes.insert(RemoteKey::from(source));
