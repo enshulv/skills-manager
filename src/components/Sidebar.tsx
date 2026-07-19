@@ -40,7 +40,11 @@ function getSyncHealthIndicator(health: SyncHealth, skillCount: number): { color
     return { color: "bg-amber-400", title: parts.join(", ") };
   }
   if (health.project_only > 0) return { color: "bg-blue-400", title: `${health.project_only} project only` };
-  if (health.in_sync === skillCount) return { color: "bg-emerald-400", title: "All in sync" };
+  // Every problem bucket has already returned above, so reaching here means the
+  // only non-empty bucket is in_sync. Test that directly instead of comparing to
+  // skillCount, which is deduped across agents and would mismatch the per-variant
+  // health tallies for a skill mirrored under multiple agents.
+  if (health.in_sync > 0) return { color: "bg-emerald-400", title: "All in sync" };
   return null;
 }
 
