@@ -180,13 +180,25 @@ fn project_agent_targets_for_record(
         .collect()
 }
 
+/// Count workspace skills without double-counting one that is mirrored across
+/// several agent directories (e.g. `.claude/skills/foo` and `.cursor/skills/foo`
+/// are the same skill). Identity is `relative_path`, which is the skill's path
+/// within its agent root and is therefore shared across agents.
+fn count_distinct_skills(skills: &[project_scanner::ProjectSkillInfo]) -> usize {
+    skills
+        .iter()
+        .map(|s| &s.relative_path)
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+}
+
 fn project_to_dto(
     rec: &ProjectRecord,
     all_managed: &[SkillRecord],
     configs: &[project_scanner::AgentSkillConfig],
 ) -> ProjectDto {
     let skills = read_workspace_skills(rec, configs);
-    let skill_count = skills.len();
+    let skill_count = count_distinct_skills(&skills);
 
     let mut health = SyncHealthDto::default();
     for skill in &skills {
@@ -1217,8 +1229,8 @@ pub async fn delete_project_skill(
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_sync_status, ensure_distinct_linked_workspace_roots, explicit_pull_needs_backup,
-        remove_workspace_skill_target, set_project_skill_enabled_state,
+        classify_sync_status, count_distinct_skills, ensure_distinct_linked_workspace_roots,
+        explicit_pull_needs_backup, remove_workspace_skill_target, set_project_skill_enabled_state,
         update_project_skill_from_center_inner,
     };
     use crate::core::content_hash;
@@ -1279,6 +1291,33 @@ mod tests {
             last_modified_at,
             content_hash,
         }
+    }
+
+    /// Build a project skill fixture with an explicit relative_path + agent so
+    /// tests can model the "same skill mirrored across agents" shape.
+    fn skill_at(relative_path: &str, agent: &str) -> ProjectSkillInfo {
+        ProjectSkillInfo {
+            relative_path: relative_path.to_string(),
+            agent: agent.to_string(),
+            ..sample_project_skill(String::new(), None, None)
+        }
+    }
+
+    #[test]
+    fn count_distinct_skills_dedupes_same_skill_across_agents() {
+        // Same skill under two agents + one distinct skill: 3 rows, 2 skills.
+        let skills = vec![
+            skill_at("foo", "claude_code"),
+            skill_at("foo", "cursor"),
+            skill_at("bar", "claude_code"),
+        ];
+        assert_eq!(count_distinct_skills(&skills), 2);
+    }
+
+    #[test]
+    fn count_distinct_skills_keeps_distinct_paths() {
+        let skills = vec![skill_at("foo", "claude_code"), skill_at("bar", "claude_code")];
+        assert_eq!(count_distinct_skills(&skills), 2);
     }
 
     // --- Explicit "pull from center" backup safety net (#225 follow-up) ---
